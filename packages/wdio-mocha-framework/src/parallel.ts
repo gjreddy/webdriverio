@@ -19,7 +19,7 @@ import type { AsyncLocalStorage } from 'node:async_hooks'
 import type { Suite } from 'mocha'
 import logger from '@wdio/logger'
 import { dottedFullTitle, type TitledNode } from './common.js'
-import { allocateContext, cleanupAllocation, resolveMaxContexts, type ParallelContextAllocation, type ParallelMode } from '@wdio/utils'
+import { allocateContext, cleanupAllocation, resolveMaxContexts, type ParallelContextAllocation, type ParallelContextBrowser, type ParallelMode } from '@wdio/utils'
 import type { EventEmitter } from 'node:events'
 
 const log = logger('@wdio/mocha-framework:parallel')
@@ -75,15 +75,9 @@ function resolveTimeoutMs(timeout?: number | string): number {
  * webdriverio (to avoid a circular dependency), so we declare the shape
  * we need here.
  */
-interface ParallelBrowser extends WebdriverIO.Browser {
+interface ParallelBrowser extends WebdriverIO.Browser, ParallelContextBrowser {
     isBidi: boolean
     __parallelContextStore?: AsyncLocalStorage<string>
-    /** Set of framework-managed parallel contexts (see session/context.ts). */
-    __parallelContexts?: Set<string>
-    browsingContextCreate(params: { type: string; userContext?: string }): Promise<{ context: string }>
-    browsingContextClose(params: { context: string }): Promise<void>
-    browserCreateUserContext?(params: Record<string, never>): Promise<{ userContext: string }>
-    browserRemoveUserContext?(params: { userContext: string }): Promise<void>
 }
 
 interface CollectedTest {
