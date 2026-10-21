@@ -68,6 +68,12 @@ export default class WDIOReporter extends EventEmitter {
                 this.retries = count
             }
         }
+        const applyStart = (testStat: TestStats, test: Test) => {
+            if (typeof test.start === 'number' && typeof test.end === 'number') {
+                testStat.start = new Date(test.start)
+            }
+        }
+        const endOf = (test: Test) => typeof test.end === 'number' ? new Date(test.end) : undefined
         const trackContext = (test: Test, testStat: TestStats) => {
             if (test.contextId) {
                 contextTests.set(test.contextId, testStat)
@@ -162,7 +168,8 @@ export default class WDIOReporter extends EventEmitter {
 
         this.on('test:pass', (test: Test) => {
             const testStat = this.tests[test.uid]
-            testStat.pass()
+            applyStart(testStat, test)
+            testStat.pass(endOf(test))
             this.counts.passes++
             this.counts.tests++
             this.onTestPass(testStat)
@@ -182,7 +189,8 @@ export default class WDIOReporter extends EventEmitter {
         this.on('test:fail', (test: Test) => {
             const testStat = this.tests[test.uid]
 
-            testStat.fail(getErrorsFromEvent(test))
+            applyStart(testStat, test)
+            testStat.fail(getErrorsFromEvent(test), endOf(test))
             this.counts.failures++
             this.counts.tests++
             this.onTestFail(testStat)
@@ -191,7 +199,8 @@ export default class WDIOReporter extends EventEmitter {
         this.on('test:retry', (test: Test) => {
             const testStat = this.tests[test.uid]
 
-            testStat.fail(getErrorsFromEvent(test))
+            applyStart(testStat, test)
+            testStat.fail(getErrorsFromEvent(test), endOf(test))
             this.onTestRetry(testStat)
             const contextId = getContextId(test)
             setRetries(contextId, getRetries(contextId) + 1)
@@ -212,8 +221,9 @@ export default class WDIOReporter extends EventEmitter {
                 currentTest.start = startedTest.start
                 currentTest.output = startedTest.output
             }
+            applyStart(currentTest, test)
             // a pending test that never started (Mocha `it.skip`) ends now, with no duration
-            currentTest.complete()
+            currentTest.complete(endOf(test))
 
             /**
              * In Mocha: tests that are skipped don't have a start event but a test end.

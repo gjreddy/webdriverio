@@ -447,6 +447,7 @@ export default class AllureReporter extends WDIOReporter {
 
     private _endTest(payload: {
         status: AllureStatus
+        start?: number
         stop?: number
         duration?: number
         statusDetails?: StatusDetails
@@ -634,22 +635,24 @@ export default class AllureReporter extends WDIOReporter {
             }
         })
 
-        process.on(events.startStep, (name: string) => {
+        const onStartStep = (name: string) => {
             if (this._tpSkipActive(this._currentCid())) { return }
             this._pushRuntimeMessage({ type: 'step_start', data: { name, start: Date.now() } })
-        })
-        process.on(
-            events.endStep,
-            (arg: AllureStatus | { status: AllureStatus; statusDetails?: StatusDetails }) => {
-                if (this._tpSkipActive(this._currentCid())) { return }
-                const payload = typeof arg === 'string' ? { status: arg } : arg
-                this._pushRuntimeMessage({ type: 'step_stop', data: { ...payload, stop: Date.now() } })
-            },
-        )
-        process.on(events.runtimeMessage, (payload: RuntimeMessage) => {
+        }
+        const onEndStep = (arg: AllureStatus | { status: AllureStatus; statusDetails?: StatusDetails }) => {
+            if (this._tpSkipActive(this._currentCid())) { return }
+            const payload = typeof arg === 'string' ? { status: arg } : arg
+            this._pushRuntimeMessage({ type: 'step_stop', data: { ...payload, stop: Date.now() } })
+        }
+        const onRuntimeMessage = (payload: RuntimeMessage) => {
             if (this._tpSkipActive(this._currentCid())) { return }
             this._pushRuntimeMessage(payload as WDIORuntimeMessage)
-        })
+        }
+        for (const emitter of [process, this]) {
+            emitter.on(events.startStep, onStartStep)
+            emitter.on(events.endStep, onEndStep)
+            emitter.on(events.runtimeMessage, onRuntimeMessage)
+        }
     }
 
     onRunnerStart(runner: RunnerStats): void {
@@ -659,7 +662,8 @@ export default class AllureReporter extends WDIOReporter {
         this._capabilities = runner.capabilities
         this._isMultiRemote = runner.isMultiRemote || false
         const mochaOpts = (runner.config as { mochaOpts?: { parallelMode?: boolean } } | undefined)?.mochaOpts
-        this._laneMode = runner.config?.framework === 'mocha' && Boolean(mochaOpts?.parallelMode)
+        this._laneMode = runner.config?.framework === 'vitest' ||
+            (runner.config?.framework === 'mocha' && Boolean(mochaOpts?.parallelMode))
         this._lanesSeen = false
 
         const specs = (runner as unknown as { specs?: string[] }).specs || []
@@ -1023,6 +1027,7 @@ export default class AllureReporter extends WDIOReporter {
         this._endTest({
             status: AllureStatusEnum.PASSED,
             stage: AllureStage.FINISHED,
+            start: AllureReporter.getTimeOrNow((test as TestStats).start),
             stop: end,
             duration: (test as TestStats).duration,
         })
@@ -1039,6 +1044,7 @@ export default class AllureReporter extends WDIOReporter {
         this._endTest({
             status,
             statusDetails: getStatusDetailsFromFailedTest(test),
+            start: AllureReporter.getTimeOrNow(test.start),
             stop: AllureReporter.getTimeOrNow(test.end),
             duration: test.duration,
         })
@@ -1062,6 +1068,7 @@ export default class AllureReporter extends WDIOReporter {
             status,
             stage: AllureStage.FINISHED,
             statusDetails: getStatusDetailsFromFailedTest(test as TestStats),
+            start: AllureReporter.getTimeOrNow((test as TestStats).start),
             stop: AllureReporter.getTimeOrNow((test as TestStats).end),
             duration: (test as TestStats).duration,
         })
